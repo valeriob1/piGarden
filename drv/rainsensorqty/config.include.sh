@@ -48,18 +48,18 @@ config_check()
 		#${!a}
 		if [[ -z ${!var} ]] ; then
 			echo "ERROR: \$$var not set"
-			exit 1 
+			return 1
 		fi
 	done
 	if [[ -z $RAINSENSORQTY_PULSE ]] ; then
 		echo "ERROR: RAIN_GPIO_STATE not set in piGarden.conf"
-		exit 1
+		return 1
 	fi
 	return 0
 	case $GPIO_RESISTOR in
 		pull-up|pull-down|none) return 0 ;;
 		*) echo "ERROR: GPIO_RESISTOR not set correctly - values are \"pull-up|pull-down|none\" "
-			exit 1
+			return 1
 			;;
 	esac
 }

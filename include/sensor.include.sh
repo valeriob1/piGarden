@@ -31,8 +31,8 @@ function sensor_get_state {
 function sensor_alias2number {
 	for i in $(seq $EV_TOTAL)
 	do
-		a=SENSOR"$i"_ALIAS
-		av=${!a}
+		local a=SENSOR"$i"_ALIAS
+		local av=${!a}
 		if [ "$av" == "$1" ]; then
 			return $i
 		fi
@@ -52,8 +52,8 @@ function sensor_alias_exists {
 	local vret='FALSE'
 	for i in $(seq $EV_TOTAL)
 	do
-		a=SENSOR"$i"_ALIAS
-		av=${!a}
+		local a=SENSOR"$i"_ALIAS
+		local av=${!a}
 		if [ "$av" == "$1" ]; then
 			vret='TRUE'
 		fi
@@ -68,8 +68,8 @@ function sensor_alias_exists {
 function sensor_status_all {
 	for i in $(seq $SENSOR_TOTAL)
 	do
-		a=SENSOR"$i"_ALIAS
-		av=${!a}
+		local a=SENSOR"$i"_ALIAS
+		local av=${!a}
 		for t in $SENSOR_STATE_TYPE
 		do
 			local state=$(sensor_get_state $i $t)
@@ -85,12 +85,12 @@ function sensor_status_all {
 #
 function sensor_status {
 	sensor_alias2number $1
-	i=$?
+	local i=$?
 	if [ -z "$2" ]; then
 		for t in $SENSOR_STATE_TYPE
 		do
 			local state=$(sensor_get_state $i $t)
-			echo -e "$av: $t $state"
+			echo -e "$1: $t $state"
 		done
 	else
 		local state=$(sensor_get_state $i $2)
@@ -107,7 +107,7 @@ function sensor_status {
 #
 function sensor_status_set {
 	sensor_alias2number $1
-	i=$?
+	local i=$?
 	sensor_set_state $i $2 $3
 	mqtt_status
 }
@@ -136,8 +136,8 @@ function json_sensor_status_all {
 
 	for i in $(seq $SENSOR_TOTAL)
 	do
-		a=SENSOR"$i"_ALIAS
-		av=${!a}
+		local a=SENSOR"$i"_ALIAS
+		local av=${!a}
 
 		js_type=""
 		for t in $SENSOR_STATE_TYPE

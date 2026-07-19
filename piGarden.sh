@@ -34,7 +34,7 @@ function initialize {
 	# Inizializza i gpio delle elettrovalvole e ne chiude l'alimentazione
 	for i in $(seq $EV_TOTAL)
 	do
-		g=EV"$i"_GPIO
+		local g=EV"$i"_GPIO
 		drv_rele_init "${!g}"
 		ev_set_state $i 0
 	done
@@ -42,8 +42,8 @@ function initialize {
 	# Chiude tutte le elettrovalvole
 	for i in $(seq $EV_TOTAL)
 	do
-		a=EV"$i"_ALIAS
-		al=${!a}
+		local a=EV"$i"_ALIAS
+		local al=${!a}
 		ev_close $al
 	done
 
@@ -58,15 +58,6 @@ function initialize {
 	trigger_event "init_after" ""
 	log_write "general" "info" "End initialize"
 
-}
-
-#
-# Elimina i file contenente i messaggi da inserire nel json status
-#
-function reset_messages_old {
-	rm -f "$LAST_INFO_FILE.$!"
-	rm -f "$LAST_WARNING_FILE.$!"
-	rm -f "$LAST_SUCCESS_FILE.$!"
 }
 
 #
@@ -152,7 +143,7 @@ function ev_open {
 		drv_rele_close "$g"
 		if [ $? -eq 1 ]; then
 			unlock
-			return		
+			return 1
 		fi
 	else
 		supply_positive
@@ -247,8 +238,8 @@ function ev_close {
 
 	# Dall'alias dell'elettrovalvola recupero il numero e dal numero recupero gpio da usare
 	ev_alias2number $1
-	EVNUM=$?
-	g=`ev_number2gpio $EVNUM`
+	local EVNUM=$?
+	local g=`ev_number2gpio $EVNUM`
 	local EV_IS_REMOTE_VAR=EV"$EVNUM"_REMOTE
 	local EV_IS_REMOTE=${!EV_IS_REMOTE_VAR}
 
@@ -256,12 +247,12 @@ function ev_close {
 
 	lock
 
-	# Gestisce l'apertura dell'elettrovalvola in base alla tipologia (monostabile / bistabile) 
+	# Gestisce l'apertura dell'elettrovalvola in base alla tipologia (monostabile / bistabile)
 	if [ "$EV_MONOSTABLE" == "1" ] || [ "$EV_IS_REMOTE" == "1" ]; then
 		drv_rele_open "$g"
 		if [ $? -eq 1 ]; then
 			unlock
-			return		
+			return 1
 		fi
 	else
 		supply_negative
@@ -359,21 +350,6 @@ function message_write {
 	
 }
 
-function message_write_old {
-	local file_message=""
-	if [ "$1" = 'info' ]; then
-		file_message="$LAST_INFO_FILE.$!"
-	elif [ "$1" = "warning" ]; then
-		file_message="$LAST_WARNING_FILE.$!"
-	elif [ "$1" = "success" ]; then
-		file_message="$LAST_SUCCESS_FILE.$!"
-	else
-		return
-	fi
-	
-	echo "$2" > "$file_message"
-}
-
 #
 # Imposta lo stgato di una elettrovalvola
 # $1 numero dell'elettrovalvola 
@@ -397,10 +373,10 @@ function ev_get_state {
 function gpio_alias2number {
 	for i in $(seq $EV_TOTAL)
 	do
-		g=EV"$i"_GPIO
-		a=EV"$i"_ALIAS
-		gv=${!g}
-		av=${!a}
+		local g=EV"$i"_GPIO
+		local a=EV"$i"_ALIAS
+		local gv=${!g}
+		local av=${!a}
 		if [ "$av" == "$1" ]; then
 			return $gv
 		fi
@@ -419,8 +395,8 @@ function gpio_alias2number {
 function ev_alias2number {
 	for i in $(seq $EV_TOTAL)
 	do
-		a=EV"$i"_ALIAS
-		av=${!a}
+		local a=EV"$i"_ALIAS
+		local av=${!a}
 		if [ "$av" == "$1" ]; then
 			return $i
 		fi
@@ -440,8 +416,8 @@ function alias_exists {
 	local vret='FALSE'
 	for i in $(seq $EV_TOTAL)
 	do
-		a=EV"$i"_ALIAS
-		av=${!a}
+		local a=EV"$i"_ALIAS
+		local av=${!a}
 		if [ "$av" == "$1" ]; then
 			vret='TRUE'
 		fi
@@ -478,8 +454,8 @@ function ev_number2norain {
 function ev_status_all {
 	for i in $(seq $EV_TOTAL)
 	do
-		a=EV"$i"_ALIAS
-		av=${!a}
+		local a=EV"$i"_ALIAS
+		local av=${!a}
 		ev_get_state $i
 		echo -e "$av: $?"
 	done
@@ -491,7 +467,7 @@ function ev_status_all {
 #
 function ev_status {
 	ev_alias2number $1
-	i=$?
+	local i=$?
 	ev_get_state $i
 	local state=$?
 	echo -e "$state"
@@ -504,6 +480,8 @@ function ev_status {
 #
 function close_all {
 
+		local failed=0
+
 		for i in $(seq $EV_TOTAL)
 		do
 			local a=EV"$i"_ALIAS
@@ -512,10 +490,12 @@ function close_all {
 			local state=$?
 			#echo "$al = $state"
 			if [[ "$state" -gt "0" || "$1" = "force" ]]; then
-				ev_close $al
+				ev_close $al || failed=1
 				log_write "irrigate" "info" "close_all - Close solenoid '$al' for rain"
 			fi
 		done
+
+		return $failed
 
 }
 
@@ -920,18 +900,18 @@ function exec_reboot {
 # $5	parametro 5 
 
 function cmd_pigardensched {
-	local foo="bar"
 
 	if [ $PIGARDENSCHED == 0 ]; then
 		echo "piGardenSched not configured in piGarden" >&2
 		log_write "piGardenSched" "error" "piGardenSched not configured in piGarden"
-		return
+		return 1
 	fi
 
-	$PIGARDENSCHED_PATH $1 $2 $3 $4 $5
+	$PIGARDENSCHED_PATH "$1" "$2" "$3" "$4" "$5"
 
 	if [ $? -ne 0 ]; then
-		echo "piGardenSched command failed"
+		echo "piGardenSched command failed" >&2
+		return 1
 	fi
 }
 
@@ -1121,18 +1101,18 @@ case "$1" in
 			echo -e "Alias solenoid not specified"
 			exit 1
 		fi
-		ev_open $2 $3
+		ev_open "$2" "$3"
 		;;
 
 	open_in)
-		ev_open_in $2 $3 $4 $5
+		ev_open_in "$2" "$3" "$4" "$5"
 		;;
 
 	close)
 		if [ "empty$2" == "empty" ]; then
 			echo -e "Alias solenoid not specified"
 		fi
-		ev_close $2
+		ev_close "$2"
 		;;
 
 	list_alias)
@@ -1140,7 +1120,7 @@ case "$1" in
 		;;
 
 	ev_status)
-		ev_status $2
+		ev_status "$2"
 		;;
 
 	ev_status_all)
@@ -1152,15 +1132,15 @@ case "$1" in
 		;;
 
 	sensor_status)
-		sensor_status $2 $3
+		sensor_status "$2" "$3"
 		;;
-	
+
 	sensor_status_all)
 		sensor_status_all
 		;;
 
 	sensor_status_set)
-		sensor_status_set $2 $3 $4
+		sensor_status_set "$2" "$3" "$4"
 		;;
 
 	json_sensor_status_all)
@@ -1172,7 +1152,7 @@ case "$1" in
 		;;
 
 	mqtt_status)
-		mqtt_status $2
+		mqtt_status "$2"
 		;;
 
 	last_rain_sensor_timestamp)
@@ -1204,7 +1184,7 @@ case "$1" in
 		;;
 
 	close_all)
-		close_all $2
+		close_all "$2"
 		;;
 
         start_socket_server)
@@ -1282,15 +1262,15 @@ case "$1" in
 		;;
 
 	del_cron_open)
-		del_cron_open $2 
+		del_cron_open "$2"
 		;;
 
 	del_cron_open_in)
-		del_cron_open_in $2 
+		del_cron_open_in "$2"
 		;;
 
 	get_cron_open)
-		get_cron_open $2
+		get_cron_open "$2"
 		;;
 
 	add_cron_close)
@@ -1298,17 +1278,17 @@ case "$1" in
 		;;
 
 	del_cron_close)
-		del_cron_close $2 
+		del_cron_close "$2"
 		;;
 
 	get_cron_close)
-		get_cron_close $2
+		get_cron_close "$2"
 		;;
 
 	cmd_pigardensched)
-		cmd_pigardensched $2 $3 $4 $5
+		cmd_pigardensched "$2" "$3" "$4" "$5"
 		;;
-	
+
 	reboot)
 		exec_reboot
 		;;
@@ -1318,11 +1298,11 @@ case "$1" in
 		;;
 
 	debug1)
-		debug1 $2 $3 $4 $5
+		debug1 "$2" "$3" "$4" "$5"
 		;;
 
 	debug2)
-		debug2 $2 $3 $4 $5
+		debug2 "$2" "$3" "$4" "$5"
 		;;
 
 
@@ -1335,5 +1315,3 @@ esac
 # Elimina eventuali file temporani utilizzati per la gestione dei cron e i messaggi per il sockt server
 rm "$TMP_CRON_FILE" 2> /dev/null
 rm "$TMP_CRON_FILE-2" 2> /dev/null
-
-#reset_messages &> /dev/null

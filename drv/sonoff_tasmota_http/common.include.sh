@@ -33,7 +33,7 @@ function drv_sonoff_tasmota_http_command {
 
 	echo "url api sonoff: $url" >> "$LOG_OUTPUT_DRV_FILE"
 
-	$CURL --connect-timeout 5 -sb -H "$url"
+	$CURL --connect-timeout 5 --max-time 15 -s "$url"
 
 	local res=$?
 

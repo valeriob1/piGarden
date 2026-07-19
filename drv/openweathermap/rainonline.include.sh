@@ -9,7 +9,7 @@
 function drv_openweathermap_rain_online_get {
 
 	# http://www.wunderground.com/weather/api/d/docs?d=resources/phrase-glossary&MR=1
-	$CURL "http://api.openweathermap.org/data/2.5/weather?$OPENWEATHERMAP_LOCATION&units=metric&appid=$OPENWEATHERMAP_KEY" > $TMP_PATH/check_rain_online.openweathermap.json
+	$CURL --connect-timeout 5 --max-time 15 "http://api.openweathermap.org/data/2.5/weather?$OPENWEATHERMAP_LOCATION&units=metric&appid=$OPENWEATHERMAP_KEY" > $TMP_PATH/check_rain_online.openweathermap.json
 	local weather=`cat $TMP_PATH/check_rain_online.openweathermap.json | $JQ -M ".weather[0].main"`
 
 	local wind_deg=$(cat $TMP_PATH/check_rain_online.openweathermap.json | $JQ -r -M ".wind.deg")

@@ -23,8 +23,14 @@ function drv_remote_command {
 	local remote_user="${!remote_user_var}"
 	local remote_pwd="${!remote_pwd_var}"
 
+	if ! timeout 5 bash -c "cat < /dev/null > /dev/tcp/$remote_ip/$remote_port" 2>/dev/null; then
+		log_write "drv_remote" "error" "Remote '$remote' unreachable at $remote_ip:$remote_port"
+		message_write "warning" "Remote '$remote' unreachable"
+		return 1
+	fi
+
 	exec 5<>/dev/tcp/$remote_ip/$remote_port
-	
+
 	if [[ ! -z $remote_user ]] && [[ ! -z $remote_pwd ]]; then
 		command="$remote_user\n$remote_pwd\n$command"
 	fi

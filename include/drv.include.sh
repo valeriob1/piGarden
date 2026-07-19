@@ -80,25 +80,45 @@ function get_driver_callback {
 }
 
 #
+# Risolve ed invoca, se presente, la callback del driver associata a "$idx" per la funzione "$1",
+# occupandosi del logging comune a tutti i dispatch verso i driver.
+#
+# $1	nome della funzione per il quale si vuole recuperare/invocare la callback
+# $2	identificativo (gpio o "drv:...") da passare alla callback
+#
+# return: 2 - nessun driver configurato per $2, il chiamante deve usare il fallback gpio raw
+#	  1 - il driver configurato non e' stato trovato, oppure la callback del driver ha fallito
+#	  0 - la callback del driver e' stata eseguita con successo
+#
+function drv_dispatch {
+	local fnc=`get_driver_callback "$1" "$2"`
+
+	if [ -z "$fnc" ]; then
+		return 2
+	elif [ "$fnc" == "drvnotfound" ]; then
+	        log_write "drv" "error" "Driver not found: $2"
+        	message_write "warning" "Driver not found: $2"
+		return 1
+	fi
+
+	echo "$(date) $fnc arg:$2" >> "$LOG_OUTPUT_DRV_FILE"
+	$fnc "$2" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
+	return $?
+}
+
+#
 # Inizializza un relè e lo porta nello stato aperto
 #
 # $1	identificativo relè da inizializzare
 #
 function drv_rele_init {
 	local idx="$1"
-	local fnc=`get_driver_callback "rele_init" "$idx"`
+	drv_dispatch "rele_init" "$idx"
 
 	# Nessun driver definito, esegue la chiusura del relè tramite gpio del raspberry
-	if [ -z "$fnc" ]; then
+	if [ $? -eq 2 ]; then
                 $GPIO -g write $idx $RELE_GPIO_OPEN   # chiude l'alimentazione all'elettrovalvole
                 $GPIO -g mode $idx out                # setta il gpio nella modalita di scrittura
-	# Il driver definito non è stato trovato
-	elif [ "$fnc" == "drvnotfound" ]; then
-	        log_write "drv" "error" "Driver not found: $idx"
-        	message_write "warning" "Driver not found: $idx"
-	else
-		echo "$(date) $fnc arg:$idx" >> "$LOG_OUTPUT_DRV_FILE"
-		$fnc "$idx" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
 	fi
 }
 
@@ -109,22 +129,14 @@ function drv_rele_init {
 #
 function drv_rele_close {
 	local idx="$1"
-	local fnc=`get_driver_callback "rele_close" "$idx"`
+	drv_dispatch "rele_close" "$idx"
+	local rc=$?
 
 	# Nessun driver definito, esegue la chiusura del relè tramite gpio del raspberry
-	if [ -z "$fnc" ]; then
-		$GPIO -g write $idx $RELE_GPIO_CLOSE	
-	# Il driver definito non è stato trovato
-	elif [ "$fnc" == "drvnotfound" ]; then
-	        log_write "drv" "error" "Driver not found: $idx"
-        	message_write "warning" "Driver not found: $idx"
+	if [ "$rc" -eq 2 ]; then
+		$GPIO -g write $idx $RELE_GPIO_CLOSE
+	elif [ "$rc" -eq 1 ]; then
 		return 1
-	else
-		echo "$(date) $fnc arg:$idx" >> "$LOG_OUTPUT_DRV_FILE"
-		$fnc "$idx" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
-		if [ $? -eq 1 ]; then
-			return 1
-		fi
 	fi
 }
 
@@ -135,22 +147,14 @@ function drv_rele_close {
 #
 function drv_rele_open {
 	local idx="$1"
-	local fnc=`get_driver_callback "rele_open" "$idx"`
+	drv_dispatch "rele_open" "$idx"
+	local rc=$?
 
 	# Nessun driver definito, esegue la chiusura del relè tramite gpio del raspberry
-	if [ -z "$fnc" ]; then
-		$GPIO -g write $idx $RELE_GPIO_OPEN	
-	# Il driver definito non è stato trovato
-	elif [ "$fnc" == "drvnotfound" ]; then
-	        log_write "drv" "error" "Driver not found: $idx"
-        	message_write "warning" "Driver not found: $idx"
+	if [ "$rc" -eq 2 ]; then
+		$GPIO -g write $idx $RELE_GPIO_OPEN
+	elif [ "$rc" -eq 1 ]; then
 		return 1
-	else
-		echo "$(date) $fnc arg:$idx" >> "$LOG_OUTPUT_DRV_FILE"
-		$fnc "$idx" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
-		if [ $? -eq 1 ]; then
-			return 1
-		fi
 	fi
 }
 
@@ -161,38 +165,15 @@ function drv_rele_open {
 # $2	identificativo relè 2
 #
 function drv_supply_bistable_init {
-	local idx1=$1
-	local idx2=$2
-	local fnc1=`get_driver_callback "supply_bistable_init" "$idx1"`
-	local fnc2=`get_driver_callback "supply_bistable_init" "$idx2"`
-
-	# Nessun driver definito, esegue l'operazione tramite gpio del raspberry
-	if [ -z "$fnc1" ]; then
-		$GPIO -g write $idx1 0
-		$GPIO -g mode $idx1 out
-	# Il driver definito non è stato trovato
-	elif [ "$fnc1" == "drvnotfound" ]; then
-	        log_write "drv" "error" "Driver not found: $idx1"
-        	message_write "warning" "Driver not found: $idx1"
-		return
-	else
-		echo "$(date) $fnc1 arg:$idx1" >> "$LOG_OUTPUT_DRV_FILE"
-		$fnc1 "$idx1" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
-	fi
-
-	# Nessun driver definito, esegue l'operazione tramite gpio del raspberry
-	if [ -z "$fnc2" ]; then
-		$GPIO -g write $idx2 0
-		$GPIO -g mode $idx2 out
-	# Il driver definito non è stato trovato
-	elif [ "$fnc2" == "drvnotfound" ]; then
-	        log_write "drv" "error" "Driver not found: $idx2"
-        	message_write "warning" "Driver not found: $idx2"
-	else
-		echo "$(date) $fnc2 arg:$idx2" >> "$LOG_OUTPUT_DRV_FILE"
-		$fnc2 "$idx2" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
-	fi
-
+	local idx
+	for idx in "$1" "$2"; do
+		drv_dispatch "supply_bistable_init" "$idx"
+		# Nessun driver definito, esegue l'operazione tramite gpio del raspberry
+		if [ $? -eq 2 ]; then
+			$GPIO -g write $idx 0
+			$GPIO -g mode $idx out
+		fi
+	done
 }
 
 #
@@ -202,36 +183,14 @@ function drv_supply_bistable_init {
 # $2	identificativo rele 2
 #
 function drv_supply_positive {
-	local idx1=$1
-	local idx2=$2
-	local fnc1=`get_driver_callback "supply_positive" "$idx1"`
-	local fnc2=`get_driver_callback "supply_positive" "$idx2"`
-
-	# Nessun driver definito, esegue l'operazione tramite gpio del raspberry
-	if [ -z "$fnc1" ]; then
-		$GPIO -g write $idx1 $SUPPLY_GPIO_POS
-	# Il driver definito non è stato trovato
-	elif [ "$fnc1" == "drvnotfound" ]; then
-	        log_write "drv" "error" "Driver not found: $idx1"
-        	message_write "warning" "Driver not found: $idx1"
-		return
-	else
-		echo "$(date) $fnc1 arg:$idx1" >> "$LOG_OUTPUT_DRV_FILE"
-		$fnc1 "$idx1" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
-	fi
-
-	# Nessun driver definito, esegue l'operazione tramite gpio del raspberry
-	if [ -z "$fnc2" ]; then
-		$GPIO -g write $idx2 $SUPPLY_GPIO_POS
-	# Il driver definito non è stato trovato
-	elif [ "$fnc2" == "drvnotfound" ]; then
-	        log_write "drv" "error" "Driver not found: $idx2"
-        	message_write "warning" "Driver not found: $idx2"
-	else
-		echo "$(date) $fnc2 arg:$idx2" >> "$LOG_OUTPUT_DRV_FILE"
-		$fnc2 "$idx2" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
-	fi
-
+	local idx
+	for idx in "$1" "$2"; do
+		drv_dispatch "supply_positive" "$idx"
+		# Nessun driver definito, esegue l'operazione tramite gpio del raspberry
+		if [ $? -eq 2 ]; then
+			$GPIO -g write $idx $SUPPLY_GPIO_POS
+		fi
+	done
 }
 
 #
@@ -241,36 +200,14 @@ function drv_supply_positive {
 # $2	identificativo rele 2
 #
 function drv_supply_negative {
-	local idx1=$1
-	local idx2=$2
-	local fnc1=`get_driver_callback "supply_negative" "$idx1"`
-	local fnc2=`get_driver_callback "supply_negative" "$idx2"`
-
-	# Nessun driver definito, esegue l'operazione tramite gpio del raspberry
-	if [ -z "$fnc1" ]; then
-		$GPIO -g write $idx1 $SUPPLY_GPIO_NEG
-	# Il driver definito non è stato trovato
-	elif [ "$fnc1" == "drvnotfound" ]; then
-	        log_write "drv" "error" "Driver not found: $idx1"
-        	message_write "warning" "Driver not found: $idx1"
-		return
-	else
-		echo "$(date) $fnc1 arg:$idx1" >> "$LOG_OUTPUT_DRV_FILE"
-		$fnc1 "$idx1" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
-	fi
-
-	# Nessun driver definito, esegue l'operazione tramite gpio del raspberry
-	if [ -z "$fnc2" ]; then
-		$GPIO -g write $idx2 $SUPPLY_GPIO_NEG
-	# Il driver definito non è stato trovato
-	elif [ "$fnc2" == "drvnotfound" ]; then
-	        log_write "drv" "error" "Driver not found: $idx2"
-        	message_write "warning" "Driver not found: $idx2"
-	else
-		echo "$(date) $fnc2 arg:$idx2" >> "$LOG_OUTPUT_DRV_FILE"
-		$fnc2 "$idx2" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
-	fi
-
+	local idx
+	for idx in "$1" "$2"; do
+		drv_dispatch "supply_negative" "$idx"
+		# Nessun driver definito, esegue l'operazione tramite gpio del raspberry
+		if [ $? -eq 2 ]; then
+			$GPIO -g write $idx $SUPPLY_GPIO_NEG
+		fi
+	done
 }
 
 #
@@ -280,19 +217,11 @@ function drv_supply_negative {
 #
 function drv_rain_sensor_init {
 	local idx="$1"
-	local fnc=`get_driver_callback "rain_sensor_init" "$idx"`
-	local vret=""
+	drv_dispatch "rain_sensor_init" "$idx"
 
 	# Nessun driver definito, esegue la lettura del sensore tramite gpio del raspberry
-	if [ -z "$fnc" ]; then
+	if [ $? -eq 2 ]; then
 		$GPIO -g mode $idx in
-	# Il driver definito non è stato trovato
-	elif [ "$fnc" == "drvnotfound" ]; then
-	        log_write "drv" "error" "Driver not found: $idx"
-        	message_write "warning" "Driver not found: $idx"
-	else
-		echo "$(date) $fnc arg:$idx" >> "$LOG_OUTPUT_DRV_FILE"
-		$fnc "$idx" >> "$LOG_OUTPUT_DRV_FILE" 2>&1
 	fi
 
 }
@@ -333,12 +262,8 @@ function drv_rain_online_get {
 	local fnc=`get_driver_callback "rain_online_get" "$idx"`
 	local vret=""
 
-	# Nessun driver definito, esegue la lettura del sensore tramite gpio del raspberry
-	if [ -z "$fnc" ]; then
-	        log_write "drv" "error" "Driver not found: $idx"
-        	message_write "warning" "Driver not found: $idx"
-	# Il driver definito non è stato trovato
-	elif [ "$fnc" == "drvnotfound" ]; then
+	# Non esiste un fallback raw gpio per il meteo online: nessun driver configurato o driver non trovato sono entrambi un errore
+	if [ -z "$fnc" ] || [ "$fnc" == "drvnotfound" ]; then
 	        log_write "drv" "error" "Driver not found: $idx"
         	message_write "warning" "Driver not found: $idx"
 	else
