@@ -8,7 +8,14 @@ LOG_FILE_MAX_SIZE=1048576 # 1MB
 
 #LOG_URL="http://url_of_your_pigardenweb/api/log"
 #LOG_API_TOKEN="token_of_pigardenweb_user"
-#LOG_CURL_PARAM="--data-urlencode -k"
+# Extra curl options for the log request (usually not needed).
+# Do NOT put --data-urlencode here: it takes an argument, it would swallow
+# the next option and curl would exit with "no URL specified", silently
+# dropping every log line. The fields are already url-encoded by log_send().
+#LOG_CURL_PARAM=""
+# Timeouts for the log request, in seconds
+#LOG_CURL_CONNECT_TIMEOUT=5
+#LOG_CURL_MAX_TIME=15
 
 # Log file for driver output
 #LOG_OUTPUT_DRV_FILE="/tmp/piGarden.drv.log"

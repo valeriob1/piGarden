@@ -325,9 +325,89 @@ function log_write {
 #
 function log_send {
 
-	if [[ ! -z "$LOG_URL" ]]; then
-		$CURL $LOG_CURL_PARAM "$LOG_URL" -d "api_token=$LOG_API_TOKEN&type=$1&level=$2&datetime_log=$3&message=$4" &> /dev/null &
+	if [[ -z "$LOG_URL" ]]; then
+		return 0
 	fi
+
+	# Ogni campo va passato con il suo --data-urlencode: con un unico -d un
+	# messaggio che contiene &, = o spazi spezzerebbe il body della POST.
+	# L'url e' passato con --url e non come argomento posizionale perche'
+	# $LOG_CURL_PARAM potrebbe contenere un'opzione che si mangia l'argomento
+	# successivo (e' esattamente quello che faceva il vecchio esempio di
+	# configurazione LOG_CURL_PARAM="--data-urlencode": curl usciva con
+	# "no URL specified" e nessun log e' mai partito).
+	# I timeout evitano che un piGardenWeb irraggiungibile lasci un curl
+	# appeso per ogni riga di log.
+	$CURL $LOG_CURL_PARAM \
+		--connect-timeout "${LOG_CURL_CONNECT_TIMEOUT:-5}" \
+		--max-time "${LOG_CURL_MAX_TIME:-15}" \
+		--data-urlencode "api_token=$LOG_API_TOKEN" \
+		--data-urlencode "type=$1" \
+		--data-urlencode "level=$2" \
+		--data-urlencode "datetime_log=$3" \
+		--data-urlencode "message=$4" \
+		--url "$LOG_URL" &> /dev/null &
+
+}
+
+#
+# Verifica in primo piano l'invio dei log a piGardenWeb, stampando la
+# risposta HTTP. log_send() gira in background scartando tutto l'output, per
+# cui senza questo comando un token sbagliato, un permesso mancante o un url
+# irraggiungibile restano completamente invisibili.
+#
+function log_test {
+
+	if [[ -z "$LOG_URL" ]]; then
+		echo "LOG_URL non e' impostato in $CONFIG_ETC: l'invio dei log a piGardenWeb e' disattivato."
+		return 1
+	fi
+
+	echo "LOG_URL:          $LOG_URL"
+	if [[ -z "$LOG_API_TOKEN" ]]; then
+		# non stampiamo mai il token: e' una credenziale
+		echo "LOG_API_TOKEN:    NON impostato"
+	else
+		echo "LOG_API_TOKEN:    impostato (${#LOG_API_TOKEN} caratteri)"
+	fi
+	echo "LOG_CURL_PARAM:   ${LOG_CURL_PARAM:-(vuoto)}"
+	# vecchi piGarden.conf copiati dall'esempio hanno questa riga: e' l'errore
+	# piu' comune, --data-urlencode si mangia l'opzione successiva
+	if [[ "$LOG_CURL_PARAM" == *"--data-urlencode"* ]]; then
+		echo ""
+		echo "ATTENZIONE: LOG_CURL_PARAM contiene --data-urlencode. Quell'opzione"
+		echo "vuole un argomento e si mangia l'opzione che la segue. Svuota la"
+		echo "riga LOG_CURL_PARAM in $CONFIG_ETC: i campi sono gia' codificati."
+	fi
+	echo ""
+
+	local http_code
+	http_code=$($CURL $LOG_CURL_PARAM \
+		--connect-timeout "${LOG_CURL_CONNECT_TIMEOUT:-5}" \
+		--max-time "${LOG_CURL_MAX_TIME:-15}" \
+		--silent --show-error \
+		--write-out '\n--- http status: %{http_code}\n' \
+		--data-urlencode "api_token=$LOG_API_TOKEN" \
+		--data-urlencode "type=log_test" \
+		--data-urlencode "level=info" \
+		--data-urlencode "datetime_log=$(date '+%Y-%m-%d %H:%M:%S')" \
+		--data-urlencode "message=test di invio log da $(hostname)" \
+		--url "$LOG_URL")
+	local vret=$?
+
+	echo "$http_code"
+
+	if [ $vret -ne 0 ]; then
+		echo "curl e' uscito con codice $vret: piGardenWeb non e' raggiungibile a $LOG_URL"
+		return 1
+	fi
+
+	# 201 = riga di log creata; qualsiasi altro codice e' un problema di
+	# token (401), di permesso 'api log' sull'utente (403) o di dati (422)
+	case "$http_code" in
+		*"http status: 201"*) echo "OK: il log e' stato accettato da piGardenWeb." ;;
+		*) echo "Il log NON e' stato accettato: leggi il messaggio qui sopra." ; return 1 ;;
+	esac
 
 }
 
@@ -739,6 +819,8 @@ function show_usage {
 	echo -e "\n"
 	echo -e "\t$NAME_SCRIPT check_rain_online                            check rain from online api service"
 	echo -e "\t$NAME_SCRIPT check_rain_sensor                            check rain from hardware sensor"
+	echo -e "\n"
+	echo -e "\t$NAME_SCRIPT log_test                                     send a test log line to piGardenWeb and show the http response"
 	echo -e "\n"
 	echo -e "\t$NAME_SCRIPT close_all_for_rain                           close all solenoid if it's raining"
 	echo -e "\t$NAME_SCRIPT close_all [force]                            close all solenoid"
@@ -1177,6 +1259,10 @@ case "$1" in
 
 	check_rain_sensor)
 		check_rain_sensor
+		;;
+
+	log_test)
+		log_test
 		;;
 
 	close_all_for_rain)
