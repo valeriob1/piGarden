@@ -20,7 +20,7 @@ if [ -n "${TEST_BOOT:-}" ]; then
     BOOT="$TEST_BOOT"
 else
     [ -d "$BOOT" ] || die "$BOOT non montata"
-    WHOLE=$(diskutil info -plist "$BOOT" | /usr/libexec/PlistBuddy -c "Print :ParentWholeDisk" /dev/stdin)
+    WHOLE=$(diskutil info -plist "$BOOT" | plutil -extract ParentWholeDisk raw -)
     [ "$WHOLE" = "$DISK" ] || die "$BOOT sta su $WHOLE, non su $DISK"
 fi
 grep -q "^Raspberry Pi reference 2026-09-15" "$BOOT/issue.txt" || die "$BOOT non e' l'immagine del 2026-09-15"

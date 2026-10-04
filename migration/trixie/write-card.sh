@@ -34,8 +34,6 @@ echo "== 2/6 verifico l'immagine (sha256)"
 IMG_BYTES=$(stat -f %z "$IMG")
 echo "$IMG_SHA256  $IMG" | shasum -a 256 -c - >/dev/null || die "impronta dell'immagine diversa da quella attesa"
 echo "   ok: $IMG_BYTES byte, impronta corretta"
-[ $((IMG_BYTES % 4194304)) -eq 0 ] || die "dimensione immagine non multipla di 4 MiB, la rilettura non sarebbe esatta"
-BLOCKS=$((IMG_BYTES / 4194304))
 
 read -r -p "== 3/6 Cancello TUTTO /dev/$DISK e ci scrivo l'immagine. Scrivi SI per procedere: " ok
 [ "$ok" = "SI" ] || die "annullato"
@@ -45,14 +43,40 @@ diskutil unmountDisk "/dev/$DISK"
 sudo dd if="$IMG" of="/dev/r$DISK" bs=4m status=progress
 sync
 
-echo "== 5/6 rileggo la scheda e confronto l'impronta"
-GOT=$(sudo dd if="/dev/r$DISK" bs=4m count="$BLOCKS" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
-[ "$GOT" = "$IMG_SHA256" ] || die "la scheda riletta NON corrisponde ($GOT)"
-echo "   ok: la scheda contiene esattamente l'immagine"
+echo "== 5/6 rileggo la scheda e la confronto con l'immagine"
+# Non si puo' confrontare la scheda intera: appena dd chiude il disco, macOS
+# monta da solo la partizione FAT e ci scrive (.fseventsd, .Spotlight-V100).
+# Quindi: byte per byte tutto cio' che sta FUORI dalla partizione FAT
+# (MBR, spazio iniziale, partizione Linux), file per file la partizione FAT.
+# In MiB (blocchi da 1m: a 512 byte la rilettura del device sarebbe lentissima).
+# Partizione FAT: settori 16384..1064959 (fdisk) = MiB 8..519.
+FAT_START_MIB=8; FAT_END_MIB=520
+[ $((IMG_BYTES % 1048576)) -eq 0 ] || die "immagine non allineata a 1 MiB"
+IMG_MIB=$((IMG_BYTES / 1048576))
+hash_ranges() {   # $1 = file o device; legge [0,FAT_START) e [FAT_END,fine immagine)
+    { $2 dd if="$1" bs=1m count="$FAT_START_MIB" 2>/dev/null
+      $2 dd if="$1" bs=1m skip="$FAT_END_MIB" count="$((IMG_MIB - FAT_END_MIB))" 2>/dev/null
+    } | shasum -a 256 | cut -d' ' -f1
+}
+WANT=$(hash_ranges "$IMG" "")
+GOT=$(hash_ranges "/dev/r$DISK" sudo)
+[ "$GOT" = "$WANT" ] || die "MBR o partizione Linux sulla scheda NON corrispondono all'immagine"
+echo "   ok: MBR e partizione Linux identici all'immagine, byte per byte"
 
-echo "== 6/6 rimonto la partizione di avvio"
-diskutil mountDisk "/dev/$DISK" || true
-sleep 2
-mount | grep -q " /Volumes/bootfs " && echo "   ok: /Volumes/bootfs montata" \
-    || echo "   attenzione: /Volumes/bootfs non montata, provare 'diskutil mountDisk $DISK'"
+diskutil mountDisk "/dev/$DISK" >/dev/null 2>&1 || true
+sleep 3
+mount | grep -q "^/dev/${DISK}s1 on /Volumes/bootfs " || die "partizione di avvio non montata su /Volumes/bootfs"
+ATT=$(hdiutil attach -readonly -imagekey diskimage-class=CRawDiskImage "$IMG" 2>&1)
+IMGDEV=$(echo "$ATT" | awk '/FDisk/{print $1}')
+IMGMNT=$(echo "$ATT" | awk -F'\t' '/Windows_FAT_32/{gsub(/^[ \t]+|[ \t]+$/,"",$NF); print $NF}')
+[ -n "$IMGMNT" ] && [ "$IMGMNT" != /Volumes/bootfs ] || { [ -n "$IMGDEV" ] && diskutil eject "$IMGDEV" >/dev/null; die "montaggio dell'immagine inatteso"; }
+if diff -rq -x .Spotlight-V100 -x .fseventsd /Volumes/bootfs "$IMGMNT" >/dev/null 2>&1; then
+    diskutil eject "$IMGDEV" >/dev/null
+    echo "   ok: tutti i file della partizione di avvio identici all'immagine"
+else
+    diskutil eject "$IMGDEV" >/dev/null
+    die "file della partizione di avvio diversi dall'immagine"
+fi
+
+echo "== 6/6 partizione di avvio montata su /Volumes/bootfs"
 echo "FATTO. Se macOS dice che un disco non e' leggibile, e' la partizione Linux: premi Ignora."

@@ -2,7 +2,7 @@
 #
 # Scrive network-config sulla scheda: WiFi solo sulla chiavetta USB AR9271,
 # riconosciuta dal MAC (la prenotazione DHCP di 192.168.20.9 e' legata a lui).
-# Nome e password della rete si digitano qui e non compaiono a schermo.
+# Nome e password della rete si digitano qui; la password non compare a schermo.
 #
 set -euo pipefail
 
@@ -18,11 +18,11 @@ if [ -n "${TEST_BOOT:-}" ]; then
     BOOT="$TEST_BOOT"
 else
     [ -d "$BOOT" ] || die "$BOOT non montata"
-    WHOLE=$(diskutil info -plist "$BOOT" | /usr/libexec/PlistBuddy -c "Print :ParentWholeDisk" /dev/stdin)
+    WHOLE=$(diskutil info -plist "$BOOT" | plutil -extract ParentWholeDisk raw -)
     [ "$WHOLE" = "$DISK" ] || die "$BOOT sta su $WHOLE, non su $DISK"
 fi
 
-read -r -s -p "Nome della rete WiFi (SSID): " WIFI_SSID; echo
+read -r -p "Nome della rete WiFi (SSID): " WIFI_SSID
 read -r -s -p "Password della rete WiFi: " WIFI_PSK; echo
 read -r -s -p "Ripeti la password: " WIFI_PSK2; echo
 [ -n "$WIFI_SSID" ] || die "SSID vuoto"
