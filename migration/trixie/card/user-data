@@ -1,0 +1,50 @@
+#cloud-config
+# piGarden — primo avvio di Raspberry Pi OS Lite (trixie) sul Pi Zero W.
+# prepare-card.sh mette al posto del segnaposto qui sotto ~/.ssh/id_rsa.pub del Mac
+# prima di copiare questo file sulla partizione di avvio.
+
+hostname: pigarden
+manage_etc_hosts: true
+timezone: Europe/Rome
+locale: it_IT.UTF-8
+keyboard:
+  model: pc105
+  layout: it
+
+# "default" e' l'utente pi definito da Raspberry Pi OS in
+# /etc/cloud/cloud.cfg: password bloccata, sudo senza password, gruppo gpio.
+users:
+  - default
+ssh_authorized_keys:
+  - __SSH_PUBKEY__
+
+# SSH solo a chiave
+ssh_pwauth: false
+disable_root: true
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-pigarden.conf
+    permissions: '0644'
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+  # come sul sistema vecchio (wifi-powersave-off.service): il link e' al limite,
+  # il risparmio energetico della radio peggiora le cadute
+  - path: /etc/NetworkManager/conf.d/10-wifi-powersave-off.conf
+    permissions: '0644'
+    content: |
+      [connection]
+      wifi.powersave = 2
+  # come sul sistema vecchio: giornale in RAM per non consumare la microSD
+  - path: /etc/systemd/journald.conf.d/pigarden.conf
+    permissions: '0644'
+    content: |
+      [Journal]
+      Storage=volatile
+      RuntimeMaxUse=32M
+
+runcmd:
+  # anche il file "ssh" sulla partizione di avvio lo accende (sshswitch);
+  # questo e' il secondo modo, nel caso il primo non scatti
+  - [systemctl, enable, --now, ssh]

@@ -1,0 +1,4 @@
+# Fonte locale: cloud-init applica user-data prima della rete.
+dsmode: local
+# Cambiarlo fa ripartire il primo avvio da capo; non toccarlo dopo l'installazione.
+instance_id: pigarden-trixie-1
