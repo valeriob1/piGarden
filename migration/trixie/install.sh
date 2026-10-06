@@ -237,7 +237,7 @@ phase_check() {
         out=$(pg check_rain_online 2>&1); ok "check_rain_online eseguito"
         [ -s "$(confval STATUS_DIR)/last_weather_online" ] \
             && find "$(confval STATUS_DIR)/last_weather_online" -mmin -5 | grep -q . \
-            && ok "meteo aggiornato ora: $(jq -r '.weather[0].description? // .current_observation.weather? // "?"' "$(confval STATUS_DIR)/last_weather_online" 2>/dev/null)" \
+            && ok "meteo aggiornato ora: $(jq -r '(.weather // "?") + ", " + (.temp_c // "?") + " °C"' "$(confval STATUS_DIR)/last_weather_online" 2>/dev/null)" \
             || fail "meteo online non aggiornato: $out"
         local url; url=$(confval LOG_URL)
         if [ -n "$url" ]; then

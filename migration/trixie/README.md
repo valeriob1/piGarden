@@ -119,6 +119,28 @@ Poi: dashboard di piGardenWeb (`http://192.168.99.95`) mostra le zone e il meteo
 sul posto, controllare il sensore di pioggia (il GPIO 7 resta fisso a 1, "asciutto",
 anche con il filo staccato). Riaprire l'acqua a monte.
 
+## Passaggio alla SanDisk Endurance (dopo lo scambio)
+
+trixie gira sulla microSD da 16 GB riciclata dallo spioncino (non Endurance). Per
+portarlo sull'Endurance da 32 GB, che fino ad allora tiene Buster come rollback
+(immagine verificata in `~/pigarden-migration/pigarden-buster-endurance-20261006.img.gz`),
+il Mac ha un solo lettore, quindi si passa da un file:
+
+```bash
+ssh pi@192.168.20.9 'cd ~/piGarden && ./piGarden.sh close_all force && sudo poweroff'
+# scheda da 16 GB nel Mac
+bash migration/trixie/clone-card.sh read      # -> ~/pigarden-migration/pigarden-trixie-16gb.img
+# Endurance nel Mac
+bash migration/trixie/clone-card.sh write     # scrive e verifica, poi espelle
+# Endurance nel Pi, riaccendere; poi allargare la partizione Linux a 32 GB
+ssh pi@192.168.20.9 'sudo raspi-config nonint do_expand_rootfs && sudo reboot'
+ssh pi@192.168.20.9 'bash ~/migration/install.sh verify'
+```
+
+`clone-card.sh` accetta solo la scheda attesa (dimensione esatta) e verifica come
+`write-card.sh`: byte per byte fuori dalla FAT, file per file dentro. L'immagine della
+16 GB resta come backup di trixie; la 16 GB diventa il rollback.
+
 **Rollback**: spegnere, rimettere la scheda vecchia, riaccendere, e sul Mac
 `ssh-keygen -R 192.168.20.9` (torna la chiave host vecchia).
 
