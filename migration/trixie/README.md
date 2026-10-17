@@ -141,6 +141,67 @@ ssh pi@192.168.20.9 'bash ~/migration/install.sh verify'
 `write-card.sh`: byte per byte fuori dalla FAT, file per file dentro. L'immagine della
 16 GB resta come backup di trixie; la 16 GB diventa il rollback.
 
+## WiFi che non si riprende (6 ottobre 2026: 11 giorni offline)
+
+Con segnale a -87 dBm l'handshake WPA a volte non si chiude. NetworkManager lo
+tratta come password sbagliata, chiede una chiave nuova a nessuno ("no-secrets") e
+**blocca la connessione per sempre**: il Pi resta vivo (piGarden scrive il log ogni
+minuto) ma senza rete, e gli access point non vedono piu' tentativi. Ricostruito dai
+log UniFi in VictoriaLogs, dal log di piGarden e dallo stato di NetworkManager sulla
+scheda. Il 17 ottobre e' successo di nuovo al primo avvio dall'Endurance.
+
+**Collaudo del 17/10/2026** in una VM Debian trixie usa-e-getta su `pve`
+(NetworkManager 1.52.1 e wpa_supplicant 2.10 come il Pi), radio virtuali
+`mac80211_hwsim`, access point `hostapd` in un namespace separato, connessione uguale
+a quella generata da netplan sul Pi; guasto simulato cambiando la password dell'AP
+(stesso evento per il client: disconnessione durante l'handshake):
+
+| Prova | Risultato |
+|---|---|
+| 1. default (il Pi oggi) | un tentativo, `no-secrets`, mai piu' ricollegato con l'AP di nuovo ok: **guasto riprodotto** |
+| 2. `connection.auth-retries=0` + `autoconnect-retries=0` | identico alla 1: **non servono** |
+| 2b. idem, in fase di attivazione (come al boot) | identico: non servono nemmeno li' |
+| 3. timer `pigarden-wifi-kick` | primo tentativo del timer con AP guasto fallisce senza danni; **ricollegato al ciclo dopo il ritorno dell'AP** |
+| 4. applicare lo script a connessione attiva | 250/250 ping, nessuna riassociazione |
+
+Il collaudo ha trovato due difetti poi corretti: il timer cercava la chiavetta per
+MAC, ma da scollegato NetworkManager usa un MAC casuale (ora riconosce anche il
+`permaddr`); la cartella `journald.conf.d` puo' non esistere.
+
+Rimedio (appena il Pi torna in rete):
+
+```bash
+scp migration/trixie/wifi-resilience.sh pi@192.168.20.9:migration/
+ssh pi@192.168.20.9 'bash ~/migration/wifi-resilience.sh'
+```
+
+Timer che ogni 5 minuti riattiva la chiavetta **solo se e' scollegata**, e giornale
+di sistema persistente (50 MB). La causa di fondo resta il segnale.
+
+### Se il Pi non torna in rete: scheda gia' corretta (piano B)
+
+Il Pi offline non puo' ricevere lo script, e al riavvio del 17/10 il primo
+tentativo WiFi e' fallito. Per non dipendere dalla fortuna c'e' un'immagine con la
+correzione **gia' installata**: `~/pigarden-migration/pigarden-trixie-wififix.img`
+(sha256 `e89c1f9f…9c83`). E' l'immagine della 16 GB del 17/10 con il journal ext4
+recuperato (`e2fsck -fy`, il Pi era stato spento staccando la corrente) e, scritti
+con `debugfs -w` e riletti, gli stessi file di `wifi-resilience.sh`
+(`/usr/local/sbin/pigarden-wifi-kick` 755, servizio e timer 644, collegamento in
+`timers.target.wants`, `journald.conf.d/pigarden.conf` persistente), tutti `root`.
+
+Sul posto, con il Mac:
+
+```bash
+# Endurance dal Pi al Mac
+IMG=~/pigarden-migration/pigarden-trixie-wififix.img bash migration/trixie/clone-card.sh write
+# Endurance nel Pi, corrente; se il primo tentativo WiFi fallisce, il timer
+# riprova 5 minuti dopo l'avvio e poi ogni 5 minuti
+```
+
+Riscrive l'Endurance: si perdono solo le righe di log scritte dal Pi dopo il 17/10
+alle 19:01. Poi, da remoto: `raspi-config nonint do_expand_rootfs` + riavvio +
+`install.sh verify`.
+
 **Rollback**: spegnere, rimettere la scheda vecchia, riaccendere, e sul Mac
 `ssh-keygen -R 192.168.20.9` (torna la chiave host vecchia).
 
