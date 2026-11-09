@@ -207,3 +207,26 @@ alle 19:01. Poi, da remoto: `raspi-config nonint do_expand_rootfs` + riavvio +
 
 **Dopo**: cancellare `~/pigarden-migration/pigarden-bundle.tgz*` dal Mac e
 `~/migration/pigarden-bundle.tgz*` dal Pi (contengono le credenziali).
+
+### Com'e' finita (9 novembre 2026)
+
+Il piano B non e' servito: il quadro non si e' dovuto aprire.
+
+- Dal 17/10 ogni accensione dava uno o pochi tentativi, tutti falliti allo stesso
+  punto (l'access point manda l'EAPOL M1, la chiavetta non risponde) con il
+  segnale a -87/-88 dBm. Un hotspot dell'iPhone con lo stesso SSID non ha
+  funzionato (causa non chiarita).
+- Ha funzionato un **router portatile vicino al quadro** con lo stesso SSID e la
+  stessa password: il Pi si e' collegato subito, perche' il profilo di
+  NetworkManager e' legato al nome della rete, non all'access point.
+- Da li', via SSH, `bash ~/migration/wifi-resilience.sh` (connessione rimasta su),
+  poi spento il router: il Pi e' tornato da solo sull'access point di casa,
+  su 192.168.20.9 a -72 dBm. Poi `do_expand_rootfs`, riavvio e
+  `install.sh verify` con 0 errori.
+
+**Trappola della chiave SSH.** La scheda autorizza solo la chiave messa in
+`card/user-data` al momento della preparazione. Se quella chiave non compare in
+`~/.ssh/config` (si passa con `-i`), una pulizia delle chiavi "inutilizzate"
+la cancella e il Pi non si raggiunge piu' nemmeno quando torna in rete. Il 1/11
+e' andata cosi' ed e' servito recuperarla da Time Machine. Ora sul Pi ci sono
+piu' chiavi e il Mac ha una voce `pigarden` in `~/.ssh/config`.
