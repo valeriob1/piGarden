@@ -111,7 +111,10 @@ log "creato $ARCHIVE ($(du -h "$ARCHIVE" | cut -f1))"
 # --- 6. Copia remota (NAS) ---
 if [ -n "$BACKUP_REMOTE" ]; then
     if command -v rsync >/dev/null 2>&1; then
-        if rsync -a "$ARCHIVE" "$BACKUP_REMOTE/"; then
+        # Sul NAS l'archivio deve essere leggibile (644): la copia off-site notturna di pve
+        # lo legge con l'utente ha-backup, e con 600 rsync dava rc=23 ogni notte. La share
+        # HABackup e' visibile solo ad administrators e ha-backup. In locale resta 600.
+        if rsync -a --chmod=F644 "$ARCHIVE" "$BACKUP_REMOTE/"; then
             log "copiato su $BACKUP_REMOTE"
         else
             log "AVVISO: copia remota fallita (l'archivio locale resta disponibile)"
