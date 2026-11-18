@@ -296,7 +296,8 @@ phase_activate() {
     step "Crontab"
     crontab "$MIG/crontab.pi" || die "crontab non installato"
     diff <(crontab -l) "$MIG/crontab.pi" >/dev/null && ok "crontab identico a quello del Pi vecchio" || fail "crontab diverso dal pacchetto"
-    local c; c=$(crontab -l | grep -c piGarden)
+    # solo le righe di piGarden.sh: dopo la migrazione si aggiungono altre righe (es. scripts/backup.sh)
+    local c; c=$(crontab -l | grep -c 'piGarden\.sh')
     [ "$c" -eq "$EXPECTED_CRON_LINES" ] && ok "$c righe piGarden" || fail "$c righe piGarden, attese $EXPECTED_CRON_LINES"
     cron_active && ok "cron attivo" || fail "cron non attivo"
     summary
@@ -312,8 +313,10 @@ phase_verify() {
     ss -ltn | grep -q ":$(confval TCPSERVER_PORT) " && ok "socket server partito da @reboot" || fail "socket server non in ascolto"
     check_socket
     local lf; lf=$(confval LOG_FILE)
-    grep -a "End initialize" "$lf" | tail -1 | grep -q . && ok "ultimo init: $(grep -a 'Run initialize' "$lf" | tail -1 | cut -f1)" || fail "nessun init nel log"
-    [ "$(crontab -l | grep -c piGarden)" -eq "$EXPECTED_CRON_LINES" ] && ok "crontab presente" || fail "crontab incompleto"
+    # anche nei log ruotati: dopo qualche giorno l'init del boot non e' piu' nel log corrente
+    local logs; logs=$(zcat -f "$lf".*.gz "$lf" 2>/dev/null)
+    echo "$logs" | grep -a "End initialize" | tail -1 | grep -q . && ok "ultimo init: $(echo "$logs" | grep -a 'Run initialize' | tail -1 | cut -f1)" || fail "nessun init nel log"
+    [ "$(crontab -l | grep -c 'piGarden\.sh')" -eq "$EXPECTED_CRON_LINES" ] && ok "crontab presente" || fail "crontab incompleto"
     cron_active && ok "cron attivo" || fail "cron non attivo"
     sleep 1
     find "$(confval STATUS_DIR)/last_weather_online" -newermt "@$boot" 2>/dev/null | grep -q . \
