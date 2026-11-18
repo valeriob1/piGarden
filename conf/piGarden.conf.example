@@ -144,7 +144,7 @@ SENSOR1_ALIAS=Mi_Flora
 
 
 
-# Definisci il servizio online da utilizzare per il controllo delle condizioni meteo, puoi scegliere openweathermap oppure wunderground.
+# Definisci il servizio online da utilizzare per il controllo delle condizioni meteo, puoi scegliere openmeteo (gratuito, senza chiave), openweathermap oppure wunderground.
 # Se non vuoi configurare nessun servizio imposta il vale "none"
 WEATHER_SERVICE="openweathermap"
 #WEATHER_SERVICE="none" # Nessun servizio configurato
@@ -153,6 +153,12 @@ WEATHER_SERVICE="openweathermap"
 OPENWEATHERMAP_KEY=""
 OPENWEATHERMAP_LOCATION="q=Pieve%20a%20Nievole,it" # https://openweathermap.org/current
 OPENWEATHERMAP_TZ="Europe/Rome"	# Time zone
+
+# Parametri di Open-Meteo, definisce le coordinate per recuperare lo stato meteo online (nessuna api key)
+OPENMETEO_LATITUDE="43.8814"
+OPENMETEO_LONGITUDE="10.7976"
+OPENMETEO_CITY="Pieve a Nievole"	# Nome mostrato in piGardenWeb
+OPENMETEO_TZ="Europe/Rome"	# Time zone
 
 # Parametri di wunderground, definisce l'api key e il luogo per recuperare lo stato meteo online
 WUNDERGROUND_KEY=""
